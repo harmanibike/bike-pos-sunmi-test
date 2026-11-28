@@ -15,8 +15,10 @@ from typing import Iterable
 
 try:
     from tools.corpus.validate_corpus import validate_file
+    from tools.corpus.validate_source_register import validate_register
 except ModuleNotFoundError:
     from validate_corpus import validate_file
+    from validate_source_register import validate_register
 
 SPECIAL_TOKENS = ["<pad>", "<unk>", "<bos>", "<eos>"]
 ALLOWED_LICENSES = {
@@ -184,10 +186,25 @@ class CharacterBPE:
         return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
-def load_training_texts(jsonl_path: Path) -> list[str]:
+def load_training_texts(jsonl_path: Path, source_register_path: Path) -> list[str]:
     errors, _ = validate_file(jsonl_path)
     if errors:
         raise ValueError("Korpus tidak lolos validasi: " + "; ".join(errors[:5]))
+    register_errors, _ = validate_register(source_register_path)
+    if register_errors:
+        raise ValueError("Register sumber tidak valid: " + "; ".join(register_errors[:5]))
+    import csv
+    approved = {}
+    with source_register_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if row["decision"].strip().lower() == "approved" and row["training_permission"].strip().lower() == "yes":
+                approved[row["source_id"]] = {
+                    "title": row["title"].strip(),
+                    "uri": row["canonical_uri"].strip(),
+                    "license": row["declared_license"].strip().lower(),
+                }
+    if not approved:
+        raise ValueError("Register tidak memiliki sumber approved dengan izin training.")
     texts: list[str] = []
     for line_number, line in enumerate(jsonl_path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
@@ -206,6 +223,14 @@ def load_training_texts(jsonl_path: Path) -> list[str]:
             or source.get("license") not in ALLOWED_LICENSES
         ):
             raise ValueError(f"Sumber/lisensi tidak valid pada baris {line_number}")
+        source_id = source["source_id"]
+        registered = approved.get(source_id)
+        if registered is None:
+            raise ValueError(f"source_id {source_id} tidak ada dalam register approved pada baris {line_number}")
+        if source.get("title") != registered["title"] or source.get("uri") != registered["uri"]:
+            raise ValueError(f"Metadata source tidak cocok dengan register pada baris {line_number}")
+        if source.get("license") != registered["license"]:
+            raise ValueError(f"Lisensi korpus tidak cocok dengan register pada baris {line_number}")
         messages = record.get("messages", [])
         if not isinstance(messages, list) or len(messages) < 2:
             raise ValueError(f"Messages tidak valid pada baris {line_number}")
@@ -225,10 +250,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("corpus", type=Path, help="korpus JSONL yang sudah ditinjau")
     parser.add_argument("--output", type=Path, required=True, help="file tokenizer JSON")
+    parser.add_argument("--source-register", type=Path, required=True,
+                        help="CSV register sumber dengan izin training yang disetujui")
     parser.add_argument("--vocab-size", type=int, default=512)
     parser.add_argument("--min-frequency", type=int, default=2)
     args = parser.parse_args()
-    texts = load_training_texts(args.corpus)
+    texts = load_training_texts(args.corpus, args.source_register)
     tokenizer = CharacterBPE.train(texts, args.vocab_size, args.min_frequency)
     tokenizer.save(args.output)
     print(json.dumps({

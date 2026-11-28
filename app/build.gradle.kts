@@ -74,4 +74,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jsoup:jsoup:1.18.3")
     testImplementation("junit:junit:4.13.2")
+    // Real org.json implementation for local JVM unit tests; Android runtime uses platform org.json.
+    testImplementation("org.json:json:20240303")
 }

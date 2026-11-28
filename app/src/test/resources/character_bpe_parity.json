@@ -1,0 +1,223 @@
+{
+  "purpose": "synthetic_cross_language_tokenizer_test_only_not_training_data",
+  "tokenizer": {
+    "format": "tata-character-bpe",
+    "format_version": 1,
+    "special_tokens": [
+      "<pad>",
+      "<unk>",
+      "<bos>",
+      "<eos>"
+    ],
+    "alphabet": [
+      " ",
+      "a",
+      "b",
+      "c",
+      "i",
+      "🧩"
+    ],
+    "merges": [
+      [
+        "a",
+        "b"
+      ],
+      [
+        "ab",
+        "c"
+      ]
+    ],
+    "vocab_size": 12
+  },
+  "samples": [
+    {
+      "text": "abc i🧩",
+      "token_ids": [
+        11,
+        4,
+        8,
+        9
+      ],
+      "decoded": "abc i🧩"
+    },
+    {
+      "text": "abc z",
+      "token_ids": [
+        11,
+        4,
+        1
+      ],
+      "decoded": "abc "
+    }
+  ],
+  "additional_cases": [
+    {
+      "purpose": "synthetic_indonesian_formatting_unicode_test_only_not_training_data",
+      "tokenizer": {
+        "format": "tata-character-bpe",
+        "format_version": 1,
+        "special_tokens": [
+          "<pad>",
+          "<unk>",
+          "<bos>",
+          "<eos>"
+        ],
+        "alphabet": [
+          "\n",
+          " ",
+          "-",
+          ".",
+          "/",
+          "0",
+          "1",
+          "2",
+          "6",
+          "8",
+          ":",
+          "R",
+          "a",
+          "b",
+          "d",
+          "e",
+          "h",
+          "i",
+          "k",
+          "l",
+          "m",
+          "n",
+          "o",
+          "p",
+          "r",
+          "s",
+          "t",
+          "u",
+          "🧩"
+        ],
+        "merges": [],
+        "vocab_size": 33
+      },
+      "samples": [
+        {
+          "text": "sepeda",
+          "token_ids": [
+            29,
+            19,
+            27,
+            19,
+            18,
+            16
+          ],
+          "decoded": "sepeda"
+        },
+        {
+          "text": "memperbaiki sepeda",
+          "token_ids": [
+            24,
+            19,
+            24,
+            27,
+            19,
+            28,
+            17,
+            16,
+            21,
+            22,
+            21,
+            5,
+            29,
+            19,
+            27,
+            19,
+            18,
+            16
+          ],
+          "decoded": "memperbaiki sepeda"
+        },
+        {
+          "text": "Rp 10.000",
+          "token_ids": [
+            15,
+            27,
+            5,
+            10,
+            9,
+            7,
+            9,
+            9,
+            9
+          ],
+          "decoded": "Rp 10.000"
+        },
+        {
+          "text": "28/11/2026",
+          "token_ids": [
+            11,
+            13,
+            8,
+            10,
+            10,
+            8,
+            11,
+            9,
+            11,
+            12
+          ],
+          "decoded": "28/11/2026"
+        },
+        {
+          "text": "user: halo\nassistant: hai",
+          "token_ids": [
+            31,
+            29,
+            19,
+            28,
+            14,
+            5,
+            20,
+            16,
+            23,
+            26,
+            4,
+            16,
+            29,
+            29,
+            21,
+            29,
+            30,
+            16,
+            25,
+            30,
+            14,
+            5,
+            20,
+            16,
+            21
+          ],
+          "decoded": "user: halo\nassistant: hai"
+        },
+        {
+          "text": "anak-anak",
+          "token_ids": [
+            16,
+            25,
+            16,
+            22,
+            6,
+            16,
+            25,
+            16,
+            22
+          ],
+          "decoded": "anak-anak"
+        },
+        {
+          "text": "🧩",
+          "token_ids": [
+            32
+          ],
+          "decoded": "🧩"
+        }
+      ]
+    }
+  ]
+}

@@ -73,7 +73,7 @@ Setiap perubahan korpus menghasilkan manifest versi baru, jumlah contoh, hash fi
 - Simpan tokenizer, konfigurasi normalisasi, versi korpus, dan hash dalam satu paket versi. Penanda peran dan newline dipertahankan sebagai batas giliran yang sama pada tokenizer, training, prompt generasi, dan evaluator.
 - Uji kata berimbuhan, kata ulang, singkatan, nama lokal, angka rupiah, tanda baca, campuran Indonesia/Inggris, serta teks suara yang umum.
 - Tes awal mencakup round-trip Unicode, determinisme, token tidak dikenal, penyimpanan atomik, validasi urutan merge, simbol yang harus sudah tersedia, larangan token hasil merge duplikat, kecocokan ukuran vocabulary, dan pemisahan data yang belum ditinjau atau held-out. Loader pada tokenizer/training/evaluator juga menjalankan validasi korpus sebelum membaca data.
-- Jalankan smoke test setelah dataset sintetis ditinjau: `python tools/corpus/validate_corpus.py tools/corpus/examples/synthetic_sample.jsonl` lalu `python tools/corpus/train_tokenizer.py tools/corpus/examples/synthetic_sample.jsonl --output /tmp/tata-tokenizer.json`.
+- Jalankan smoke test setelah dataset sintetis ditinjau: `python tools/corpus/validate_corpus.py tools/corpus/examples/synthetic_sample.jsonl` lalu `python tools/corpus/train_tokenizer.py tools/corpus/examples/synthetic_sample.jsonl --source-register docs/dataset_source_register.csv --output /tmp/tata-tokenizer.json`.
 
 ### Tahap 4 — eksperimen model pertama
 - Arsitektur riset awal: decoder-only Transformer kecil yang dilatih dari bobot acak, bukan fine-tuning bobot model lain.
@@ -108,12 +108,12 @@ Tidak ada klaim model siap digunakan sebelum melewati evaluasi dan uji perangkat
 6. Android: inferensi offline diuji pada perangkat fisik.
 
 ## Langkah implementasi berikutnya
-Validator korpus JSONL tersedia di `tools/corpus/validate_corpus.py`; generator manifest di `tools/corpus/build_manifest.py`; pembagi dataset deterministik tersedia di `tools/corpus/split_corpus.py`. Pembagian mengelompokkan berdasarkan `source_id`, hanya menerima contoh yang lolos tinjauan privasi dan kualitas, dan menolak dataset dengan kurang dari tiga sumber yang disetujui. Tes mencakup determinisme, pencegahan kebocoran sumber, dan catatan pending yang tetap unassigned. Fixture sintetis masih berstatus tinjauan kualitas pending, sehingga belum menjadi data latih. Spesifikasi baseline Transformer v0 kini didokumentasikan di `docs/TRANSFORMER_V0_SPEC.md`; estimator konfigurasi tersedia di `tools/model/transformer_config.py` dan menghitung baseline 1.350.400 parameter dengan tied embeddings. Tes Python memeriksa jumlah parameter dan konfigurasi tidak valid. Ini belum merupakan implementasi Transformer, loop training, atau bobot model. Langkah berikutnya adalah meninjau sumber dataset berizin yang cukup, menguji tokenizer dengan data tersebut, lalu baru membuat implementasi training kecil.
+Validator korpus JSONL tersedia di `tools/corpus/validate_corpus.py`; generator manifest di `tools/corpus/build_manifest.py`; pembagi dataset deterministik tersedia di `tools/corpus/split_corpus.py`. Pembagian mengelompokkan berdasarkan `source_id`, hanya menerima contoh yang lolos tinjauan privasi dan kualitas, dan menolak dataset dengan kurang dari tiga sumber yang disetujui. Tes mencakup determinisme, pencegahan kebocoran sumber, dan catatan pending yang tetap unassigned. Fixture sintetis masih berstatus tinjauan kualitas pending, sehingga belum menjadi data latih. Spesifikasi baseline Transformer v0 ada di `docs/TRANSFORMER_V0_SPEC.md`; estimator konfigurasi tersedia di `tools/model/transformer_config.py` dan menghitung baseline 1.350.400 parameter dengan tied embeddings. Implementasi decoder-only Transformer dan loop training lokal kini tersedia di `tools/model/train_transformer.py`; keduanya tetap fondasi eksperimen, bukan model produksi yang sudah terlatih.
 
 
 ### Implementasi mesin training awal
 
-Loop pelatihan lokal tersedia di `tools/model/train_transformer.py`, dengan loader data terpisah `tools/model/training_data.py`. Loader hanya mengizinkan split train/validation dan contoh yang lulus tinjauan privasi serta kualitas; split test tidak dapat dimuat. Model decoder-only dibuat dari bobot acak dan dilatih dengan next-token cross-entropy, AdamW, gradient clipping, validasi loss/perplexity, serta checkpoint atomik. Hash train/validation/tokenizer dicatat dan diperiksa saat resume. Ukuran vocabulary diambil dari tokenizer aktual dan hitungan parameter runtime dicocokkan dengan estimator. Implementasi membutuhkan PyTorch 2.x di komputer lokal; CI tidak menjalankan training. Belum ada korpus produksi yang lolos review dan belum ada bobot model terlatih. Langkah berikutnya adalah uji unit/CI, memperoleh sumber data berizin, lalu menjalankan eksperimen kecil pada komputer pelatihan.
+Loop pelatihan lokal tersedia di `tools/model/train_transformer.py`, dengan loader data terpisah `tools/model/training_data.py`. Loader hanya mengizinkan split train/validation dan contoh yang lulus tinjauan privasi serta kualitas; split test tidak dapat dimuat. Model decoder-only dibuat dari bobot acak dan dilatih dengan next-token cross-entropy, AdamW, gradient clipping, validasi loss/perplexity, serta checkpoint atomik. Hash train/validation/tokenizer/register sumber dicatat dan diperiksa saat resume. Ukuran vocabulary diambil dari tokenizer aktual dan hitungan parameter runtime dicocokkan dengan estimator. CI menjalankan tes runtime serta simulasi training/resume singkat memakai data sintetis terkontrol; CI tidak melatih model produksi dari korpus nyata. Implementasi membutuhkan PyTorch 2.x di komputer lokal. Belum ada korpus produksi yang lolos review dan belum ada bobot model terlatih. Langkah berikutnya adalah memperoleh sumber data berizin, menyelesaikan review manusia, lalu menjalankan eksperimen kecil pada komputer pelatihan.
 
 
 ## Evaluasi model
@@ -123,7 +123,7 @@ Evaluator held-out tersedia di `tools/model/evaluate_transformer.py`, dengan tes
 
 ### Evaluasi tokenizer sebelum model training
 
-Tool `tools/corpus/evaluate_tokenizer.py` menyediakan probe tetap untuk imbuhan Indonesia, reduplikasi, format rupiah, tanggal/jam, tanda baca, campuran bahasa, nama lokal, dan karakter emoji. Catat unknown rate, token-per-character, dan round-trip; bandingkan tokenizer pada korpus train yang sama. Probe ini hanya untuk evaluasi, tidak boleh digabung ke data training. Rasio token lebih kecil bukan bukti model lebih pintar atau lebih akurat.
+Tool `tools/corpus/evaluate_tokenizer.py` menyediakan probe tetap untuk imbuhan Indonesia, reduplikasi, format rupiah, tanggal/jam, tanda baca, campuran bahasa, nama lokal, dan karakter emoji. Laporan hanya menyimpan ID probe dan metrik agregat (unknown rate, token-per-character, dan round-trip), bukan menyalin isi teks uji. Probe hanya untuk evaluasi dan tidak boleh digabung ke data training. Tes memastikan teks khusus tidak bocor ke JSON laporan. Rasio token lebih kecil bukan bukti model lebih pintar atau lebih akurat.
 
 
 ### Konteks pilot dan sampling validation
@@ -133,7 +133,7 @@ Trainer mendukung `--context-length` dengan default 256. Konteks lebih pendek da
 
 ### Pemisahan checkpoint terbaik dan checkpoint resume
 
-Trainer kini memisahkan dua keluaran: file yang ditentukan melalui `--output` adalah checkpoint terakhir untuk melanjutkan training, sedangkan nama dengan sisipan `.best` sebelum ekstensi menyimpan bobot dengan validation loss terendah. Checkpoint resume juga membawa snapshot bobot terbaik dan step-nya sehingga status best tidak hilang ketika training dilanjutkan. Penulisan kedua file memakai mekanisme atomik. Train loss, validation loss, dan gradient norm yang bukan angka finite menghentikan training agar checkpoint rusak tidak diteruskan. Evaluator dapat membaca checkpoint best karena format model dan metadata utamanya tetap kompatibel. Fitur ini sudah diuji pada level helper/path dan CI; training nyata tetap menunggu korpus berizin yang telah disetujui.
+Trainer kini memisahkan dua keluaran: file yang ditentukan melalui `--output` adalah checkpoint terakhir untuk melanjutkan training, sedangkan nama dengan sisipan `.best` sebelum ekstensi menyimpan bobot dengan validation loss terendah. Checkpoint resume juga membawa snapshot bobot terbaik dan step-nya sehingga status best tidak hilang ketika training dilanjutkan. Penulisan kedua file memakai mekanisme atomik. Train loss, validation loss, dan gradient norm yang bukan angka finite menghentikan training agar checkpoint rusak tidak diteruskan. Evaluator dapat membaca checkpoint best karena format model dan metadata utamanya tetap kompatibel. Fitur ini diuji melalui tes helper/path, pemuatan aman `weights_only=True`, round-trip checkpoint yang mencakup state RNG, serta tes integrasi CI yang menjalankan dua langkah training, menyimpan checkpoint, memuatnya kembali, lalu melanjutkan hingga langkah keempat. Tes tersebut memakai data sintetis terkontrol dan bukan bukti training pada korpus produksi. Training produksi tetap menunggu korpus berizin yang telah disetujui.
 
 
 ### Early stopping dan stabilitas training
@@ -188,3 +188,23 @@ python tools/corpus/build_review_queue.py corpus.jsonl --output review-queue.jso
 ```
 
 Antrean mencakup contoh dengan status privasi/kualitas pending serta kandidat pertanyaan mirip dari audit leksikal. Untuk setiap item tersedia ID, sumber, lisensi, split, alasan, dan tautan ID ke contoh terkait; teks mentah tidak diekspor. Buka korpus lokal berdasarkan `example_id`, periksa sumber dan konteks, lalu isi file keputusan berdasarkan template sebelum menjalankan `review_corpus.py`.
+
+
+### Gerbang izin sumber terhubung ke tokenizer dan trainer
+
+- Register sumber CSV berada di `docs/dataset_source_register.csv`; format dan kolomnya dijelaskan di `docs/DATASET_SOURCE_REGISTER_TEMPLATE.md`.
+- Validasi register dapat dijalankan dengan `python tools/corpus/validate_source_register.py docs/dataset_source_register.csv`. Template kosong memang akan gagal karena belum ada sumber yang ditinjau.
+- Tokenizer kini memerlukan argumen `--source-register` dan hanya mengambil contoh train yang lolos review serta berasal dari `source_id` berstatus approved dengan `training_permission=yes`.
+- Loader Transformer juga memerlukan path register; setiap sumber contoh train/validation harus ditemukan dalam register approved. Judul dan URI kanonis pada JSONL harus cocok dengan register.
+- Hash register dicatat pada metadata dataset dan diperiksa saat melanjutkan checkpoint. Perubahan izin atau isi register membuat resume ditolak agar checkpoint tidak dilanjutkan dengan provenance berbeda.
+- Perintah tokenizer dan training harus selalu menyertakan register:
+  `python tools/corpus/train_tokenizer.py <corpus.jsonl> --source-register <sources.csv> --output <tokenizer.json>`
+  `python tools/model/train_transformer.py --corpus <corpus.jsonl> --tokenizer <tokenizer.json> --source-register <sources.csv> --output <checkpoint.pt>`
+- Pemeriksaan ini adalah gerbang teknis berbasis metadata. Ia tidak membuktikan secara hukum bahwa dokumen izin benar atau lisensi ditafsirkan tepat; bukti tetap harus diperiksa manusia.
+
+
+Generator manifest kini juga memerlukan `--source-register` dan menolak sumber yang tidak terdaftar, belum approved, atau metadata judul/URI-nya tidak cocok. Manifest mencatat URI bukti izin, declared license, izin training, dan status penggunaan komersial untuk setiap sumber yang dipakai.
+
+## Audit jalur inferensi Android
+
+Penilaian struktur Android, format checkpoint, tokenizer, dan kandidat runtime dicatat di [`docs/ANDROID_NEURAL_INFERENCE_ASSESSMENT.md`](ANDROID_NEURAL_INFERENCE_ASSESSMENT.md). Runtime GGUF/llama.cpp yang sudah ada tetap jalur kompatibilitas terpisah; ia tidak memuat checkpoint PyTorch Tata secara langsung. Ekspor ONNX dan ONNX Runtime Android baru sebatas kandidat proof-of-concept, belum dipilih atau diimplementasikan. Integrasi menunggu ekspor valid, parity tokenizer, kesetaraan numerik, dan uji perangkat fisik.

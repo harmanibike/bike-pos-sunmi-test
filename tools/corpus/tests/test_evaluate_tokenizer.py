@@ -45,6 +45,14 @@ class TokenizerEvaluationTests(unittest.TestCase):
         self.assertEqual(64, len(report["tokenizer_sha256"]))
         self.assertEqual(0, report["summary"]["unknown_tokens"])
 
+    def test_report_does_not_store_custom_probe_text(self):
+        secret_probe = "TEKS-RAHASIA-UNTUK-UJI-123"
+        report = build_report(self.tokenizer_path, [secret_probe])
+        rendered = json.dumps(report, ensure_ascii=False)
+        self.assertNotIn(secret_probe, rendered)
+        self.assertEqual("probe-001", report["probes"][0]["probe_id"])
+        self.assertNotIn("text", report["probes"][0])
+
     def test_report_rejects_empty_custom_probe(self):
         with self.assertRaises(ValueError):
             build_report(self.tokenizer_path, [""])

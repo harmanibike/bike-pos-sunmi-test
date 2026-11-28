@@ -32,11 +32,12 @@ DEFAULT_PROBES = [
 ]
 
 
-def evaluate_text(tokenizer: CharacterBPE, text: str) -> dict:
+def evaluate_text(tokenizer: CharacterBPE, text: str, probe_id: str = "probe-1") -> dict:
+    """Return aggregate metrics only; never copy probe content into reports."""
     tokens = tokenizer.encode(text)
     unknown_count = sum(token == "<unk>" for token in tokens)
     return {
-        "text": text,
+        "probe_id": probe_id,
         "characters": len(text),
         "tokens": len(tokens),
         "unknown_tokens": unknown_count,
@@ -51,7 +52,10 @@ def build_report(tokenizer_path: Path, custom_texts: list[str] | None = None) ->
     probes = custom_texts if custom_texts else DEFAULT_PROBES
     if not probes or any(not isinstance(text, str) or not text for text in probes):
         raise ValueError("Setiap teks uji harus berupa string yang tidak kosong")
-    results = [evaluate_text(tokenizer, text) for text in probes]
+    results = [
+        evaluate_text(tokenizer, text, probe_id=f"probe-{index + 1:03d}")
+        for index, text in enumerate(probes)
+    ]
     total_chars = sum(item["characters"] for item in results)
     total_tokens = sum(item["tokens"] for item in results)
     total_unknown = sum(item["unknown_tokens"] for item in results)

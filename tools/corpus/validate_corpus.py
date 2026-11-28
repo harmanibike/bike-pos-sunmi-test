@@ -21,6 +21,14 @@ PHONE_RE = re.compile(r"(?<!\w)(?:\+?62|0)\s?8\d[\d\s-]{7,13}(?!\w)")
 SECRET_RE = re.compile(r"(?i)(api[_-]?key|secret|password)\s*[:=]\s*\S{8,}")
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 
+# Hard ceilings for untrusted corpus intake. These are guardrails, not training targets.
+MAX_CORPUS_BYTES = 100 * 1024 * 1024
+MAX_RECORDS = 100_000
+MAX_LINE_BYTES = 1 * 1024 * 1024
+MAX_MESSAGES_PER_RECORD = 40
+MAX_CONTENT_CHARS = 20_000
+MAX_TOTAL_CONTENT_CHARS = 100_000
+
 
 def normalize_text(value: str) -> str:
     return " ".join(value.casefold().split())
@@ -70,7 +78,10 @@ def validate_record(record: Any, line_number: int) -> list[str]:
         errors.append(f"{prefix}: messages harus berisi minimal dua pesan")
         return errors
 
+    if len(messages) > MAX_MESSAGES_PER_RECORD:
+        errors.append(f"{prefix}: jumlah pesan melebihi batas {MAX_MESSAGES_PER_RECORD}")
     valid_messages: list[dict[str, str]] = []
+    total_content_chars = 0
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
             errors.append(f"{prefix}: messages[{index}] harus berupa objek")
@@ -81,6 +92,9 @@ def validate_record(record: Any, line_number: int) -> list[str]:
         if not isinstance(content, str) or not content.strip():
             errors.append(f"{prefix}: content messages[{index}] wajib diisi")
             continue
+        total_content_chars += len(content)
+        if len(content) > MAX_CONTENT_CHARS:
+            errors.append(f"{prefix}: content messages[{index}] melebihi batas {MAX_CONTENT_CHARS} karakter")
         if role in ALLOWED_ROLES:
             valid_messages.append({"role": role, "content": content})
         for pattern, label in (
@@ -92,6 +106,8 @@ def validate_record(record: Any, line_number: int) -> list[str]:
             if pattern.search(content):
                 errors.append(f"{prefix}: terdeteksi {label} pada messages[{index}]")
 
+    if total_content_chars > MAX_TOTAL_CONTENT_CHARS:
+        errors.append(f"{prefix}: total teks percakapan melebihi batas {MAX_TOTAL_CONTENT_CHARS} karakter")
     if valid_messages and valid_messages[0]["role"] != "user":
         errors.append(f"{prefix}: pesan pertama harus dari user")
     if valid_messages and valid_messages[-1]["role"] != "assistant":
@@ -103,19 +119,36 @@ def validate_record(record: Any, line_number: int) -> list[str]:
     return errors
 
 
-def validate_file(path: Path) -> tuple[list[str], dict[str, int]]:
+def validate_file(
+    path: Path,
+    max_file_bytes: int = MAX_CORPUS_BYTES,
+    max_records: int = MAX_RECORDS,
+    max_line_bytes: int = MAX_LINE_BYTES,
+) -> tuple[list[str], dict[str, int]]:
     errors: list[str] = []
-    stats = {"records": 0, "duplicates": 0, "privacy_blocked": 0}
+    stats = {"records": 0, "duplicates": 0, "privacy_blocked": 0, "limit_blocked": 0}
     seen_ids: set[str] = set()
     seen_fingerprints: set[str] = set()
     source_splits: dict[str, str] = {}
 
     try:
+        file_size = path.stat().st_size
+        if file_size > max_file_bytes:
+            stats["limit_blocked"] += 1
+            return [f"Ukuran korpus {file_size} byte melebihi batas {max_file_bytes} byte"], stats
         content = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         return [f"Gagal membaca file UTF-8: {exc}"], stats
 
     for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        if line_number > max_records:
+            stats["limit_blocked"] += 1
+            errors.append(f"Jumlah record melebihi batas {max_records}")
+            break
+        if len(raw_line.encode("utf-8")) > max_line_bytes:
+            stats["limit_blocked"] += 1
+            errors.append(f"baris {line_number}: ukuran record melebihi batas {max_line_bytes} byte")
+            continue
         if not raw_line.strip():
             errors.append(f"baris {line_number}: baris kosong tidak diizinkan")
             continue

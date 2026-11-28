@@ -36,4 +36,4 @@ jobs:
       - name: Run Transformer configuration, data, and evaluation unit tests
         run: python -m unittest discover -s tools/model/tests -v
       - name: Check model scripts compile without loading ML dependencies
-        run: python -m py_compile tools/corpus/audit_dataset.py tools/model/transformer_config.py tools/model/training_data.py tools/model/train_transformer.py tools/model/evaluate_transformer.py tools/corpus/evaluate_tokenizer.py
+        run: python -m py_compile tools/corpus/audit_dataset.py tools/corpus/build_manifest.py tools/corpus/train_tokenizer.py tools/corpus/validate_source_register.py tools/model/transformer_config.py tools/model/training_data.py tools/model/train_transformer.py tools/model/evaluate_transformer.py tools/corpus/evaluate_tokenizer.py

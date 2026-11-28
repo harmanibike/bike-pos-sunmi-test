@@ -88,6 +88,42 @@ class CorpusValidatorTests(unittest.TestCase):
         self.assertTrue(any("duplikat" in error for error in errors))
         self.assertTrue(any("baris kosong" in error for error in errors))
 
+    def test_rejects_corpus_over_file_size_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "large.jsonl"
+            path.write_text("{}\n", encoding="utf-8")
+            errors, stats = validate_file(path, max_file_bytes=1)
+        self.assertTrue(any("Ukuran korpus" in error for error in errors))
+        self.assertEqual(1, stats["limit_blocked"])
+
+    def test_rejects_record_count_over_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "many.jsonl"
+            line = json.dumps(sample_record(), ensure_ascii=False)
+            path.write_text(line + "\n" + line + "\n", encoding="utf-8")
+            errors, stats = validate_file(path, max_records=1)
+        self.assertTrue(any("Jumlah record melebihi batas" in error for error in errors))
+        self.assertEqual(1, stats["records"])
+
+    def test_rejects_oversized_jsonl_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "line.jsonl"
+            path.write_text(json.dumps(sample_record(), ensure_ascii=False) + "\n", encoding="utf-8")
+            errors, stats = validate_file(path, max_line_bytes=10)
+        self.assertTrue(any("ukuran record melebihi batas" in error for error in errors))
+        self.assertEqual(1, stats["limit_blocked"])
+
+    def test_rejects_oversized_message_and_excessive_turns(self):
+        record = sample_record()
+        record["messages"][0]["content"] = "x" * 20_001
+        record["messages"].extend(
+            [{"role": "user", "content": "lanjutan"}, {"role": "assistant", "content": "jawaban"}]
+            * 20
+        )
+        errors = validate_record(record, 1)
+        self.assertTrue(any("melebihi batas 20000 karakter" in error for error in errors))
+        self.assertTrue(any("jumlah pesan melebihi batas 40" in error for error in errors))
+
     def test_rejects_invalid_json(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.jsonl"
